@@ -2,23 +2,17 @@ import XCTest
 @testable import TurboLispREPL
 
 final class IndenterTests: XCTestCase {
-    func testIndentationLevels() {
+    func testIndentationForSpecialForms() {
         let code = """
-(defun foo (x)
-  (let ((y 1))
-    (if x
-        y
-        0))
-)
+(defun foo ()
+  (let ((a 1)
+        (b 2))
+    (if (> a b)
+        a
+        b)))
 """
-        let styles = Indenter.styles(for: code)
-        XCTAssertEqual(styles.count, 6)
-        XCTAssertEqual(styles[0].headIndent, 0)
-        XCTAssertEqual(styles[1].headIndent, 2)
-        XCTAssertEqual(styles[2].headIndent, 4)
-        XCTAssertEqual(styles[3].headIndent, 6)
-        XCTAssertEqual(styles[4].headIndent, 6)
-        XCTAssertEqual(styles[5].headIndent, 0)
+        let indents = LispIndenter.computeIndents(for: code)
+        let values = indents.map { Int($0.head) }
+        XCTAssertEqual(values, [0,4,8,6,8,8])
     }
 }
-
