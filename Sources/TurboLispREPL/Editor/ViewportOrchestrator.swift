@@ -16,6 +16,16 @@ public final class ViewportOrchestrator: NSObject, NSTextViewportLayoutControlle
         self.viewportController.delegate = self
     }
 
+    public func viewportBounds(for textViewportLayoutController: NSTextViewportLayoutController) -> CGRect {
+        // Return the viewport bounds - typically this would be the visible rect of the text view
+        return CGRect.zero
+    }
+    
+    public func textViewportLayoutController(_ textViewportLayoutController: NSTextViewportLayoutController, configureRenderingSurfaceFor textLayoutFragment: NSTextLayoutFragment) {
+        // Configure rendering surface for the text layout fragment
+        // This is where you'd set up custom rendering if needed
+    }
+    
     public func textViewportLayoutControllerDidLayout(_ controller: NSTextViewportLayoutController) {
         // In the real application this would trigger async analysis of visible lines.
     }
