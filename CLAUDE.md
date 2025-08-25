@@ -17,12 +17,8 @@ swift test --filter TokenizerTests
 swift test --filter IndenterTests
 ```
 
-### Known Build Issue
-The ViewportOrchestrator class has missing protocol conformance methods that need to be implemented for NSTextViewportLayoutControllerDelegate. The required methods are:
-- `viewportBounds(for:)`
-- `textViewportLayoutController(_:configureRenderingSurfaceFor:)`
-
 ## Architecture
+TurboLispREPL is a macOS-only Swift package built on TextKit2. It consists of the following components:
 
 ### Core Components
 
@@ -38,11 +34,10 @@ The ViewportOrchestrator class has missing protocol conformance methods that nee
 - Base indentation is 2 spaces per depth level, with additional 2 spaces for special forms
 
 **ViewportOrchestrator** (`Sources/TurboLispREPL/Editor/ViewportOrchestrator.swift`)
-- TextKit2 integration for macOS 12.0+
+- macOS 12.0+ editor orchestrator built on TextKit2
 - Placeholder implementation for viewport layout events
-- Has cross-platform fallback for non-Apple platforms
 
 ### Package Structure
 - Swift 6.1 package with a single library target "TurboLispREPL"
 - Test target "TurboLispREPLTests" with unit tests for tokenizer and indenter
-- Conditional compilation for platform-specific features (AppKit/CoreGraphics on macOS)
+- macOS-only; uses AppKit, CoreGraphics, and TextKit2
