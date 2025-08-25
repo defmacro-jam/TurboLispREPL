@@ -111,6 +111,63 @@ final class IndenterTests: XCTestCase {
         
         XCTAssertGreaterThan(tokenCount, 0, "Should parse tokens")
     }
+
+    func testDeeplyNestedForms() {
+        let depth = 50
+        let source = String(repeating: "(", count: depth) + String(repeating: ")", count: depth)
+        let tokenizer = StandardLispTokenizer()
+        tokenizer.reset(with: source)
+        var openCount = 0
+        var closeCount = 0
+        while let token = tokenizer.nextToken() {
+            switch token.kind {
+            case .open:
+                openCount += 1
+            case .close:
+                closeCount += 1
+            default:
+                break
+            }
+        }
+        XCTAssertEqual(openCount, depth, "All opening parens should be tokenized")
+        XCTAssertEqual(closeCount, depth, "All closing parens should be tokenized")
+    }
+
+    func testUnmatchedParentheses() {
+        let missingClose = "(foo (bar 1)"
+        let extraClose = "(foo 1))"
+        let tokenizer = StandardLispTokenizer()
+
+        tokenizer.reset(with: missingClose)
+        var openCount = 0
+        var closeCount = 0
+        while let token = tokenizer.nextToken() {
+            switch token.kind {
+            case .open:
+                openCount += 1
+            case .close:
+                closeCount += 1
+            default:
+                break
+            }
+        }
+        XCTAssertTrue(openCount > closeCount, "Missing closing paren should leave more opens than closes")
+
+        tokenizer.reset(with: extraClose)
+        openCount = 0
+        closeCount = 0
+        while let token = tokenizer.nextToken() {
+            switch token.kind {
+            case .open:
+                openCount += 1
+            case .close:
+                closeCount += 1
+            default:
+                break
+            }
+        }
+        XCTAssertTrue(closeCount > openCount, "Extra closing paren should yield more closes than opens")
+    }
 }
 
 #endif
