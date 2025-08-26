@@ -34,6 +34,10 @@ public final class StandardLispTokenizer: LispTokenizerProtocol {
         self.characters = Array(source)
         self.currentIndex = 0
     }
+
+    private func isSymbolChar(_ ch: Character) -> Bool {
+        return ch.isLetter || ch.isNumber || "-_*+?!:".contains(ch)
+    }
     
     public func nextToken() -> LispToken? {
         // Skip whitespace except newlines (they might be significant for indentation)
@@ -71,7 +75,7 @@ public final class StandardLispTokenizer: LispTokenizerProtocol {
             // Extract the symbol
             while peekIndex < characters.count {
                 let peekCh = characters[peekIndex]
-                if peekCh.isLetter || peekCh.isNumber || peekCh == "-" || peekCh == "_" {
+                if isSymbolChar(peekCh) {
                     symbol.append(peekCh)
                     peekIndex += 1
                 } else {
