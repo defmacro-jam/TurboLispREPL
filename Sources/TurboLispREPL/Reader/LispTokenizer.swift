@@ -93,8 +93,8 @@ public final class StandardLispTokenizer: LispTokenizerProtocol {
                 currentIndex += 1
             }
             let range = NSRange(location: startIndex, length: currentIndex - startIndex)
-            // Return as atom for now (comments are atoms in this context)
-            return LispToken(kind: .atom(String(characters[startIndex..<currentIndex])), range: range)
+            let commentText = String(characters[startIndex..<currentIndex])
+            return LispToken(kind: .comment(commentText), range: range)
             
         case "\"":
             // String literal
