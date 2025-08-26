@@ -29,7 +29,6 @@ final class TokenizerTests: XCTestCase {
         XCTAssertEqual(tokens.first?.kind, TokenKind.comment.rawValue)
     }
 
-<<<<<<< HEAD
     func testTokenizerSkipsConsecutiveNewlines() {
         let source = "(foo)\n\n\n(bar)"
         let tokenizer = StandardLispTokenizer()
@@ -41,8 +40,8 @@ final class TokenizerTests: XCTestCase {
         }
 
         XCTAssertEqual(kinds.count, 6, "Expected six tokens ignoring newlines")
-
         guard kinds.count == 6 else { return }
+
         switch kinds[0] {
         case .open(let symbol):
             XCTAssertEqual(symbol, "foo")
@@ -77,7 +76,8 @@ final class TokenizerTests: XCTestCase {
         } else {
             XCTFail("Sixth token should be close")
         }
-=======
+    }
+
     func testSymbolExtractionAllowsSpecialCharacters() {
         let tokenizer = StandardLispTokenizer()
         let source = "(* 1 2) (+ 3 4) (contains? xs) (save! y) (:keyword 42)"
@@ -91,6 +91,5 @@ final class TokenizerTests: XCTestCase {
         }
 
         XCTAssertEqual(symbols, ["*", "+", "contains?", "save!", ":keyword"])
->>>>>>> main
     }
 }
