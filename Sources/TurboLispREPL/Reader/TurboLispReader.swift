@@ -4,9 +4,7 @@ import Foundation
 public class TurboLispReader: TurboLispReaderAPI {
     
     private let tokenizer = ContextAwareTokenizer()
-    private var formCache: [NSRange: FormInfo] = [:]
-    private let cacheTimeout: TimeInterval = 1.0  // Cache for 1 second
-    
+
     public init() {}
     
     /// Tokenize a viewport range, expanding to form boundaries for context
@@ -14,30 +12,13 @@ public class TurboLispReader: TurboLispReaderAPI {
         // Step 1: Expand to form boundaries
         let expandedRange = FormBoundaryDetector.expandToFormBoundaries(requestedRange, in: text)
         
-        // Step 2: Check cache
-        if let cached = formCache[expandedRange],
-           Date().timeIntervalSince(cached.timestamp) < cacheTimeout {
-            // Return only tokens in requested range
-            return cached.tokens.filter { tokenIntersects($0, with: requestedRange) }
-        }
-        
-        // Step 3: Determine context
+        // Determine context
         let context = tokenizer.contextAt(position: expandedRange.location, in: text)
-        
-        // Step 4: Tokenize complete form
+
+        // Tokenize complete form
         let allTokens = tokenizer.tokenize(text: text, range: expandedRange, context: context)
-        
-        // Step 5: Cache results
-        formCache[expandedRange] = FormInfo(
-            range: expandedRange,
-            tokens: allTokens,
-            context: context
-        )
-        
-        // Clean old cache entries
-        cleanCache()
-        
-        // Step 6: Return only requested range
+
+        // Return only requested range
         return allTokens.filter { tokenIntersects($0, with: requestedRange) }
     }
     
@@ -354,10 +335,4 @@ public class TurboLispReader: TurboLispReaderAPI {
         return backslashCount % 2 == 1
     }
     
-    private func cleanCache() {
-        let now = Date()
-        formCache = formCache.filter { _, info in
-            now.timeIntervalSince(info.timestamp) < cacheTimeout
-        }
-    }
 }

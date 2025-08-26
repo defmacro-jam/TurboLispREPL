@@ -8,10 +8,14 @@ import AppKit
 public final class ViewportOrchestrator: NSObject, NSTextViewportLayoutControllerDelegate {
     private let layoutManager: NSTextLayoutManager
     private let viewportController: NSTextViewportLayoutController
+    private let reader: TurboLispReaderAPI
 
-    public init(layoutManager: NSTextLayoutManager, viewportController: NSTextViewportLayoutController) {
+    public init(layoutManager: NSTextLayoutManager,
+                viewportController: NSTextViewportLayoutController,
+                reader: TurboLispReaderAPI = TurboLispReader()) {
         self.layoutManager = layoutManager
         self.viewportController = viewportController
+        self.reader = reader
         super.init()
         self.viewportController.delegate = self
     }
@@ -57,11 +61,19 @@ public final class ViewportOrchestrator: NSObject, NSTextViewportLayoutControlle
         let bounds = viewportBounds(for: controller)
         layoutManager.textView?.setNeedsDisplay(bounds)
 
-        // Placeholder for asynchronous token analysis of visible fragments.
-        DispatchQueue.global(qos: .userInitiated).async { [layoutManager] in
-            // A real implementation would analyze the fragments that intersect
-            // `bounds` and update syntax highlighting or other decorations.
-            _ = layoutManager // silence unused variable in the placeholder
+        // Determine the visible character range within the text view.
+        guard let textView = layoutManager.textView else { return }
+        let startPoint = bounds.origin
+        let endPoint = CGPoint(x: bounds.maxX, y: bounds.maxY)
+        let startIndex = textView.characterIndexForInsertion(at: startPoint)
+        let endIndex = textView.characterIndexForInsertion(at: endPoint)
+        let visibleRange = NSRange(location: startIndex, length: max(0, endIndex - startIndex))
+
+        // Tokenize the visible range using the reader.  Results can later be
+        // used for syntax highlighting or other decorations.
+        let text = textView.string
+        DispatchQueue.global(qos: .userInitiated).async { [reader] in
+            _ = reader.tokenizeViewport(text: text, requestedRange: visibleRange)
         }
     }
 }
