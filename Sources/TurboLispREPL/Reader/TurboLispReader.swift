@@ -2,43 +2,35 @@ import Foundation
 
 /// Main implementation of the TurboLisp reader API
 public class TurboLispReader: TurboLispReaderAPI {
-    
-    private let tokenizer = ContextAwareTokenizer()
-    private var formCache: [NSRange: FormInfo] = [:]
-    private let cacheTimeout: TimeInterval = 1.0  // Cache for 1 second
-    
+
     public init() {}
     
     /// Tokenize a viewport range, expanding to form boundaries for context
     public func tokenizeViewport(text: String, requestedRange: NSRange) -> [TokenSpan] {
-        // Step 1: Expand to form boundaries
+        // Expand requested range to form boundaries for context
         let expandedRange = FormBoundaryDetector.expandToFormBoundaries(requestedRange, in: text)
-        
-        // Step 2: Check cache
-        if let cached = formCache[expandedRange],
-           Date().timeIntervalSince(cached.timestamp) < cacheTimeout {
-            // Return only tokens in requested range
-            return cached.tokens.filter { tokenIntersects($0, with: requestedRange) }
+
+        guard let swiftRange = Range(expandedRange, in: text) else { return [] }
+
+        // Tokenize the expanded range using the standard tokenizer
+        let expandedText = String(text[swiftRange])
+        let rawTokens = StandardLispTokenizer.tokenize(expandedText)
+
+        // Adjust token locations and clip to the originally requested range
+        var result: [TokenSpan] = []
+        for token in rawTokens {
+            let adjustedLocation = token.location + expandedRange.location
+            let tokenRange = NSRange(location: adjustedLocation, length: token.length)
+            let intersection = NSIntersectionRange(tokenRange, requestedRange)
+            if intersection.length > 0,
+               let kind = TokenKind(rawValue: token.kind) {
+                result.append(TokenSpan(location: intersection.location,
+                                        length: intersection.length,
+                                        kind: kind,
+                                        attrs: token.attrs))
+            }
         }
-        
-        // Step 3: Determine context
-        let context = tokenizer.contextAt(position: expandedRange.location, in: text)
-        
-        // Step 4: Tokenize complete form
-        let allTokens = tokenizer.tokenize(text: text, range: expandedRange, context: context)
-        
-        // Step 5: Cache results
-        formCache[expandedRange] = FormInfo(
-            range: expandedRange,
-            tokens: allTokens,
-            context: context
-        )
-        
-        // Clean old cache entries
-        cleanCache()
-        
-        // Step 6: Return only requested range
-        return allTokens.filter { tokenIntersects($0, with: requestedRange) }
+        return result
     }
     
     /// Check if the text represents a complete form
@@ -84,25 +76,15 @@ public class TurboLispReader: TurboLispReaderAPI {
             position += lines[i].count + 1  // +1 for newline
         }
         
-        // Get context at this position
-        let context = tokenizer.contextAt(position: position, in: text)
-        
-        // Calculate indent based on depth and form type
-        var indentLevel = context.depth * 2
-        
-        // Special handling for certain forms
-        if let formType = context.formType {
-            if ["defun", "defmacro", "let", "let*", "labels", "flet"].contains(formType) {
-                // These forms typically have special indentation rules
-                indentLevel += 2
-            }
+        // Determine parenthesis depth up to this position
+        let balance = FormBoundaryDetector.checkBalance(upTo: position, in: text)
+        var depth = 0
+        if case .unbalanced(let extraOpen, _) = balance {
+            depth = extraOpen
         }
-        
-        return IndentInfo(
-            level: indentLevel,
-            isSpecialForm: context.formType != nil,
-            formName: context.formType
-        )
+
+        // Indentation is 2 spaces per depth level
+        return IndentInfo(level: depth * 2)
     }
     
     /// Find matching parenthesis
@@ -162,15 +144,14 @@ public class TurboLispReader: TurboLispReaderAPI {
         let symbolEnd = text.index(text.startIndex, offsetBy: end)
         let symbolName = String(text[symbolStart..<symbolEnd])
         
-        // Get context to determine symbol type
-        let context = tokenizer.contextAt(position: position, in: text)
-        let symbolType = classifySymbol(symbolName, context: context)
-        
+        // Classify the symbol without additional context
+        let symbolType = classifySymbol(symbolName, context: FormContext())
+
         return SymbolInfo(
             name: symbolName,
             range: NSRange(location: start, length: end - start),
             type: symbolType,
-            context: context
+            context: nil
         )
     }
     
@@ -191,11 +172,6 @@ public class TurboLispReader: TurboLispReaderAPI {
     }
     
     // MARK: - Private Helpers
-    
-    private func tokenIntersects(_ token: TokenSpan, with range: NSRange) -> Bool {
-        let tokenRange = NSRange(location: token.location, length: token.length)
-        return NSIntersectionRange(tokenRange, range).length > 0
-    }
     
     private func hasCompleteForm(_ text: String) -> Bool {
         // Simple check: must start with ( and have balanced parens
@@ -352,12 +328,5 @@ public class TurboLispReader: TurboLispReaderAPI {
         }
         
         return backslashCount % 2 == 1
-    }
-    
-    private func cleanCache() {
-        let now = Date()
-        formCache = formCache.filter { _, info in
-            now.timeIntervalSince(info.timestamp) < cacheTimeout
-        }
     }
 }
