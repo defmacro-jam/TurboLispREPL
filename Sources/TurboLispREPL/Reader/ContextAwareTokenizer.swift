@@ -3,14 +3,17 @@ import Foundation
 /// Tokenizer that understands Lisp form context for accurate token classification
 public class ContextAwareTokenizer {
     
-    /// Special forms that affect how arguments are tokenized
-    private static let specialForms = Set([
-        "defun", "defmacro", "defvar", "defparameter", "defconstant",
-        "let", "let*", "lambda", "if", "when", "unless", "cond",
-        "case", "typecase", "quote", "function", "setq", "setf",
-        "progn", "prog1", "prog2", "block", "return-from", "tagbody",
-        "go", "catch", "throw", "unwind-protect", "labels", "flet"
-    ])
+    /// Special forms that affect how arguments are tokenized. Loaded from
+    /// `Resources/SpecialForms.json` so the list can be shared with the
+    /// indenter and tokenizer.
+    private static let specialForms: Set<String> = {
+        guard let url = Bundle.module.url(forResource: "SpecialForms", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let names = try? JSONDecoder().decode([String].self, from: data) else {
+            return []
+        }
+        return Set(names.map { $0.lowercased() })
+    }()
     
     /// Tokenize with understanding of surrounding form context
     public func tokenize(text: String, range: NSRange, context: FormContext? = nil) -> [TokenSpan] {

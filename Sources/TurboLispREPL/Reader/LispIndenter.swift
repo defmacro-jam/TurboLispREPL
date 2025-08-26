@@ -32,19 +32,12 @@ public protocol LineCache {
 /// Indents Lisp source code based on forms produced by a `LispTokenizer`.
 public final class LispIndenter {
     /// Indentation rules for common special forms. The tuple represents
-    /// `(first line indent, body indent)` measured in spaces.
+    /// `(first line indent, body indent)` measured in spaces. Rules are
+    /// constructed from `Resources/SpecialForms.json`.
     #if canImport(CoreGraphics)
-    private let indentationTable: [String: (first: CGFloat, body: CGFloat)] = [
-        "defun": (first: 2, body: 2),
-        "let":   (first: 2, body: 2),
-        "if":    (first: 2, body: 2)
-    ]
+    private let indentationTable: [String: (first: CGFloat, body: CGFloat)]
     #else
-    private let indentationTable: [String: (first: Double, body: Double)] = [
-        "defun": (first: 2, body: 2),
-        "let":   (first: 2, body: 2),
-        "if":    (first: 2, body: 2)
-    ]
+    private let indentationTable: [String: (first: Double, body: Double)]
     #endif
 
     private let tokenizer: LispTokenizerProtocol
@@ -60,12 +53,14 @@ public final class LispIndenter {
         self.tokenizer = tokenizer
         self.layoutManager = layoutManager
         self.lineCache = lineCache
+        self.indentationTable = LispIndenter.buildIndentationTable()
     }
     #else
     public init(tokenizer: LispTokenizerProtocol,
                 lineCache: LineCache? = nil) {
         self.tokenizer = tokenizer
         self.lineCache = lineCache
+        self.indentationTable = LispIndenter.buildIndentationTable()
     }
     #endif
 
@@ -116,5 +111,35 @@ public final class LispIndenter {
         textStorage.addAttribute(.paragraphStyle, value: paragraph, range: range)
     }
     #endif
+    #endif
+}
+
+private extension LispIndenter {
+    /// Load special form names from the bundled JSON file.
+    static func loadSpecialForms() -> [String] {
+        guard let url = Bundle.module.url(forResource: "SpecialForms", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let names = try? JSONDecoder().decode([String].self, from: data) else {
+            return []
+        }
+        return names
+    }
+
+    #if canImport(CoreGraphics)
+    static func buildIndentationTable() -> [String: (first: CGFloat, body: CGFloat)] {
+        var table: [String: (first: CGFloat, body: CGFloat)] = [:]
+        for form in loadSpecialForms() {
+            table[form] = (first: 2, body: 2)
+        }
+        return table
+    }
+    #else
+    static func buildIndentationTable() -> [String: (first: Double, body: Double)] {
+        var table: [String: (first: Double, body: Double)] = [:]
+        for form in loadSpecialForms() {
+            table[form] = (first: 2, body: 2)
+        }
+        return table
+    }
     #endif
 }
