@@ -9,6 +9,7 @@ public struct LispToken {
         case open(symbol: String)
         case close
         case atom(String)
+        case comment(String)
     }
     public let kind: Kind
     public let range: NSRange
@@ -83,7 +84,7 @@ public final class LispIndenter {
                 applyIndent(rule, range: token.range, in: textStorage)
             case .close:
                 if stack.count > 1 { stack.removeLast() }
-            case .atom:
+            case .atom, .comment:
                 break
             }
         }

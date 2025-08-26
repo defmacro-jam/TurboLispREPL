@@ -101,15 +101,33 @@ final class IndenterTests: XCTestCase {
     func testStandardLispTokenizer() {
         let tokenizer = StandardLispTokenizer()
         let source = "(let ((x 1)))"
-        
+
         tokenizer.reset(with: source)
-        
+
         var tokenCount = 0
         while let _ = tokenizer.nextToken() {
             tokenCount += 1
         }
-        
+
         XCTAssertGreaterThan(tokenCount, 0, "Should parse tokens")
+    }
+
+    func testStandardLispTokenizerHandlesComments() {
+        let tokenizer = StandardLispTokenizer()
+        let source = "; hello\n()"
+        tokenizer.reset(with: source)
+
+        guard let token = tokenizer.nextToken() else {
+            XCTFail("Expected a comment token")
+            return
+        }
+
+        switch token.kind {
+        case .comment(let text):
+            XCTAssertEqual(text, "; hello")
+        default:
+            XCTFail("First token should be a comment")
+        }
     }
 
     func testDeeplyNestedForms() {

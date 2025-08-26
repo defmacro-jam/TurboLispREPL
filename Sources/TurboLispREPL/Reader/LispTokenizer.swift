@@ -34,6 +34,10 @@ public final class StandardLispTokenizer: LispTokenizerProtocol {
         self.characters = Array(source)
         self.currentIndex = 0
     }
+
+    private func isSymbolChar(_ ch: Character) -> Bool {
+        return ch.isLetter || ch.isNumber || "-_*+?!:".contains(ch)
+    }
     
     public func nextToken() -> LispToken? {
         while currentIndex < characters.count {
@@ -55,17 +59,72 @@ public final class StandardLispTokenizer: LispTokenizerProtocol {
             switch ch {
             case "(":
                 currentIndex += 1
-                // Look ahead for the symbol after the paren
-                var symbol = ""
-                var peekIndex = currentIndex
-
-                // Skip whitespace after paren
-                while peekIndex < characters.count {
-                    let peekCh = characters[peekIndex]
-                    if peekCh == " " || peekCh == "\t" || peekCh == "\n" || peekCh == "\r" {
-                        peekIndex += 1
-                    } else {
-                        break
+            } else {
+                break
+            }
+        }
+        
+        guard currentIndex < characters.count else { return nil }
+        
+        let startIndex = currentIndex
+        let ch = characters[currentIndex]
+        
+        switch ch {
+        case "(":
+            currentIndex += 1
+            // Look ahead for the symbol after the paren
+            var symbol = ""
+            var peekIndex = currentIndex
+            
+            // Skip whitespace after paren
+            while peekIndex < characters.count {
+                let peekCh = characters[peekIndex]
+                if peekCh == " " || peekCh == "\t" || peekCh == "\n" || peekCh == "\r" {
+                    peekIndex += 1
+                } else {
+                    break
+                }
+            }
+            
+            // Extract the symbol
+            while peekIndex < characters.count {
+                let peekCh = characters[peekIndex]
+                if isSymbolChar(peekCh) {
+                    symbol.append(peekCh)
+                    peekIndex += 1
+                } else {
+                    break
+                }
+            }
+            
+            let range = NSRange(location: startIndex, length: 1)
+            return LispToken(kind: .open(symbol: symbol), range: range)
+            
+        case ")":
+            currentIndex += 1
+            let range = NSRange(location: startIndex, length: 1)
+            return LispToken(kind: .close, range: range)
+            
+        case ";":
+            // Comment - skip to end of line
+            while currentIndex < characters.count && characters[currentIndex] != "\n" {
+                currentIndex += 1
+            }
+            let range = NSRange(location: startIndex, length: currentIndex - startIndex)
+            let commentText = String(characters[startIndex..<currentIndex])
+            return LispToken(kind: .comment(commentText), range: range)
+            
+        case "\"":
+            // String literal
+            currentIndex += 1
+            var stringContent = "\""
+            while currentIndex < characters.count {
+                let c = characters[currentIndex]
+                stringContent.append(c)
+                if c == "\\" && currentIndex + 1 < characters.count {
+                    currentIndex += 1
+                    if currentIndex < characters.count {
+                        stringContent.append(characters[currentIndex])
                     }
                 }
 
