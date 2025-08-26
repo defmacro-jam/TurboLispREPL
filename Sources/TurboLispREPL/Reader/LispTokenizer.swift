@@ -36,111 +36,117 @@ public final class StandardLispTokenizer: LispTokenizerProtocol {
     }
     
     public func nextToken() -> LispToken? {
-        // Skip whitespace except newlines (they might be significant for indentation)
         while currentIndex < characters.count {
+            // Skip whitespace except newlines (they might be significant for indentation)
+            while currentIndex < characters.count {
+                let ch = characters[currentIndex]
+                if ch == " " || ch == "\t" || ch == "\r" {
+                    currentIndex += 1
+                } else {
+                    break
+                }
+            }
+
+            guard currentIndex < characters.count else { return nil }
+
+            let startIndex = currentIndex
             let ch = characters[currentIndex]
-            if ch == " " || ch == "\t" || ch == "\r" {
+
+            switch ch {
+            case "(":
                 currentIndex += 1
-            } else {
-                break
-            }
-        }
-        
-        guard currentIndex < characters.count else { return nil }
-        
-        let startIndex = currentIndex
-        let ch = characters[currentIndex]
-        
-        switch ch {
-        case "(":
-            currentIndex += 1
-            // Look ahead for the symbol after the paren
-            var symbol = ""
-            var peekIndex = currentIndex
-            
-            // Skip whitespace after paren
-            while peekIndex < characters.count {
-                let peekCh = characters[peekIndex]
-                if peekCh == " " || peekCh == "\t" || peekCh == "\n" || peekCh == "\r" {
-                    peekIndex += 1
-                } else {
-                    break
-                }
-            }
-            
-            // Extract the symbol
-            while peekIndex < characters.count {
-                let peekCh = characters[peekIndex]
-                if peekCh.isLetter || peekCh.isNumber || peekCh == "-" || peekCh == "_" {
-                    symbol.append(peekCh)
-                    peekIndex += 1
-                } else {
-                    break
-                }
-            }
-            
-            let range = NSRange(location: startIndex, length: 1)
-            return LispToken(kind: .open(symbol: symbol), range: range)
-            
-        case ")":
-            currentIndex += 1
-            let range = NSRange(location: startIndex, length: 1)
-            return LispToken(kind: .close, range: range)
-            
-        case ";":
-            // Comment - skip to end of line
-            while currentIndex < characters.count && characters[currentIndex] != "\n" {
-                currentIndex += 1
-            }
-            let range = NSRange(location: startIndex, length: currentIndex - startIndex)
-            // Return as atom for now (comments are atoms in this context)
-            return LispToken(kind: .atom(String(characters[startIndex..<currentIndex])), range: range)
-            
-        case "\"":
-            // String literal
-            currentIndex += 1
-            var stringContent = "\""
-            while currentIndex < characters.count {
-                let c = characters[currentIndex]
-                stringContent.append(c)
-                if c == "\\" && currentIndex + 1 < characters.count {
-                    currentIndex += 1
-                    if currentIndex < characters.count {
-                        stringContent.append(characters[currentIndex])
+                // Look ahead for the symbol after the paren
+                var symbol = ""
+                var peekIndex = currentIndex
+
+                // Skip whitespace after paren
+                while peekIndex < characters.count {
+                    let peekCh = characters[peekIndex]
+                    if peekCh == " " || peekCh == "\t" || peekCh == "\n" || peekCh == "\r" {
+                        peekIndex += 1
+                    } else {
+                        break
                     }
-                } else if c == "\"" {
+                }
+
+                // Extract the symbol
+                while peekIndex < characters.count {
+                    let peekCh = characters[peekIndex]
+                    if peekCh.isLetter || peekCh.isNumber || peekCh == "-" || peekCh == "_" {
+                        symbol.append(peekCh)
+                        peekIndex += 1
+                    } else {
+                        break
+                    }
+                }
+
+                let range = NSRange(location: startIndex, length: 1)
+                return LispToken(kind: .open(symbol: symbol), range: range)
+
+            case ")":
+                currentIndex += 1
+                let range = NSRange(location: startIndex, length: 1)
+                return LispToken(kind: .close, range: range)
+
+            case ";":
+                // Comment - skip to end of line
+                while currentIndex < characters.count && characters[currentIndex] != "\n" {
                     currentIndex += 1
-                    break
                 }
+                let range = NSRange(location: startIndex, length: currentIndex - startIndex)
+                // Return as atom for now (comments are atoms in this context)
+                return LispToken(kind: .atom(String(characters[startIndex..<currentIndex])), range: range)
+
+            case "\"":
+                // String literal
                 currentIndex += 1
-            }
-            let range = NSRange(location: startIndex, length: currentIndex - startIndex)
-            return LispToken(kind: .atom(stringContent), range: range)
-            
-        case "\n":
-            currentIndex += 1
-            // Skip newlines as they're not tokens in this context
-            return nextToken()
-            
-        default:
-            // Regular atom - collect until whitespace or parens
-            var atom = ""
-            while currentIndex < characters.count {
-                let c = characters[currentIndex]
-                if c == " " || c == "\t" || c == "\n" || c == "\r" || c == "(" || c == ")" {
-                    break
+                var stringContent = "\""
+                while currentIndex < characters.count {
+                    let c = characters[currentIndex]
+                    stringContent.append(c)
+                    if c == "\\" && currentIndex + 1 < characters.count {
+                        currentIndex += 1
+                        if currentIndex < characters.count {
+                            stringContent.append(characters[currentIndex])
+                        }
+                    } else if c == "\"" {
+                        currentIndex += 1
+                        break
+                    }
+                    currentIndex += 1
                 }
-                atom.append(c)
-                currentIndex += 1
+                let range = NSRange(location: startIndex, length: currentIndex - startIndex)
+                return LispToken(kind: .atom(stringContent), range: range)
+
+            case "\n":
+                repeat {
+                    currentIndex += 1
+                } while currentIndex < characters.count && characters[currentIndex] == "\n"
+                // Skip consecutive newlines and continue scanning
+                continue
+
+            default:
+                // Regular atom - collect until whitespace or parens
+                var atom = ""
+                while currentIndex < characters.count {
+                    let c = characters[currentIndex]
+                    if c == " " || c == "\t" || c == "\n" || c == "\r" || c == "(" || c == ")" {
+                        break
+                    }
+                    atom.append(c)
+                    currentIndex += 1
+                }
+
+                if !atom.isEmpty {
+                    let range = NSRange(location: startIndex, length: atom.count)
+                    return LispToken(kind: .atom(atom), range: range)
+                }
+
+                return nil
             }
-            
-            if !atom.isEmpty {
-                let range = NSRange(location: startIndex, length: atom.count)
-                return LispToken(kind: .atom(atom), range: range)
-            }
-            
-            return nil
         }
+
+        return nil
     }
     
     /// Static helper method to get all tokens at once (for backward compatibility)
