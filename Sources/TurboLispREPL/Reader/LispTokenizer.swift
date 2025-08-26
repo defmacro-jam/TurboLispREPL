@@ -21,16 +21,57 @@ public struct TokenSpan {
     }
 }
 
-/// Concrete implementation of LispTokenizerProtocol from LispIndenter.swift
+/// Basic tokenizer used for syntax highlighting. Returns `TokenSpan`s
+/// describing strings, comments, and parentheses.
+public enum LispTokenizer {
+    public static func tokenize(_ source: String) -> [TokenSpan] {
+        var tokens: [TokenSpan] = []
+        let chars = Array(source)
+        var index = 0
+
+        while index < chars.count {
+            let ch = chars[index]
+            switch ch {
+            case "(", ")":
+                tokens.append(TokenSpan(location: index, length: 1, kind: .paren))
+                index += 1
+            case ";":
+                let start = index
+                index += 1
+                while index < chars.count && chars[index] != "\n" { index += 1 }
+                tokens.append(TokenSpan(location: start, length: index - start, kind: .comment))
+            case "\"":
+                let start = index
+                index += 1
+                while index < chars.count {
+                    let c = chars[index]
+                    if c == "\\" {
+                        index += 2
+                    } else if c == "\"" {
+                        index += 1
+                        break
+                    } else {
+                        index += 1
+                    }
+                }
+                tokens.append(TokenSpan(location: start, length: index - start, kind: .string))
+            default:
+                index += 1
+            }
+        }
+
+        return tokens
+    }
+}
+
+/// Concrete implementation of `LispTokenizerProtocol` used by the indenter.
 public final class StandardLispTokenizer: LispTokenizerProtocol {
-    private var source: String = ""
     private var characters: [Character] = []
     private var currentIndex: Int = 0
-    
+
     public init() {}
-    
+
     public func reset(with source: String) {
-        self.source = source
         self.characters = Array(source)
         self.currentIndex = 0
     }
@@ -38,215 +79,81 @@ public final class StandardLispTokenizer: LispTokenizerProtocol {
     private func isSymbolChar(_ ch: Character) -> Bool {
         return ch.isLetter || ch.isNumber || "-_*+?!:".contains(ch)
     }
-    
+
     public func nextToken() -> LispToken? {
+        // Skip whitespace including newlines
         while currentIndex < characters.count {
-            // Skip whitespace except newlines (they might be significant for indentation)
-            while currentIndex < characters.count {
-                let ch = characters[currentIndex]
-                if ch == " " || ch == "\t" || ch == "\r" {
-                    currentIndex += 1
-                } else {
-                    break
-                }
-            }
-
-            guard currentIndex < characters.count else { return nil }
-
-            let startIndex = currentIndex
             let ch = characters[currentIndex]
-
-            switch ch {
-            case "(":
+            if ch == " " || ch == "\t" || ch == "\n" || ch == "\r" {
                 currentIndex += 1
-            } else {
-                break
+                continue
             }
+            break
         }
-        
+
         guard currentIndex < characters.count else { return nil }
-        
         let startIndex = currentIndex
         let ch = characters[currentIndex]
-        
+
         switch ch {
         case "(":
             currentIndex += 1
-            // Look ahead for the symbol after the paren
-            var symbol = ""
-            var peekIndex = currentIndex
-            
-            // Skip whitespace after paren
-            while peekIndex < characters.count {
-                let peekCh = characters[peekIndex]
-                if peekCh == " " || peekCh == "\t" || peekCh == "\n" || peekCh == "\r" {
-                    peekIndex += 1
-                } else {
-                    break
-                }
+            // Peek for symbol after '('
+            var peek = currentIndex
+            // Skip whitespace
+            while peek < characters.count && (characters[peek] == " " || characters[peek] == "\t" || characters[peek] == "\n" || characters[peek] == "\r") {
+                peek += 1
             }
-            
-            // Extract the symbol
-            while peekIndex < characters.count {
-                let peekCh = characters[peekIndex]
-                if isSymbolChar(peekCh) {
-                    symbol.append(peekCh)
-                    peekIndex += 1
-                } else {
-                    break
-                }
+            var symbolEnd = peek
+            while symbolEnd < characters.count && isSymbolChar(characters[symbolEnd]) {
+                symbolEnd += 1
             }
-            
-            let range = NSRange(location: startIndex, length: 1)
-            return LispToken(kind: .open(symbol: symbol), range: range)
-            
+            let symbol = String(characters[peek..<symbolEnd])
+            currentIndex = peek
+            return LispToken(kind: .open(symbol: symbol), range: NSRange(location: startIndex, length: 1))
         case ")":
             currentIndex += 1
-            let range = NSRange(location: startIndex, length: 1)
-            return LispToken(kind: .close, range: range)
-            
+            return LispToken(kind: .close, range: NSRange(location: startIndex, length: 1))
         case ";":
-            // Comment - skip to end of line
+            currentIndex += 1
             while currentIndex < characters.count && characters[currentIndex] != "\n" {
                 currentIndex += 1
             }
-            let range = NSRange(location: startIndex, length: currentIndex - startIndex)
-            let commentText = String(characters[startIndex..<currentIndex])
-            return LispToken(kind: .comment(commentText), range: range)
-            
+            let text = String(characters[startIndex..<currentIndex])
+            return LispToken(kind: .comment(text), range: NSRange(location: startIndex, length: currentIndex - startIndex))
         case "\"":
-            // String literal
             currentIndex += 1
-            var stringContent = "\""
             while currentIndex < characters.count {
                 let c = characters[currentIndex]
-                stringContent.append(c)
-                if c == "\\" && currentIndex + 1 < characters.count {
+                if c == "\\" {
+                    currentIndex += 2
+                } else if c == "\"" {
                     currentIndex += 1
-                    if currentIndex < characters.count {
-                        stringContent.append(characters[currentIndex])
-                    }
-                }
-
-                // Extract the symbol
-                while peekIndex < characters.count {
-                    let peekCh = characters[peekIndex]
-                    if peekCh.isLetter || peekCh.isNumber || peekCh == "-" || peekCh == "_" {
-                        symbol.append(peekCh)
-                        peekIndex += 1
-                    } else {
-                        break
-                    }
-                }
-
-                let range = NSRange(location: startIndex, length: 1)
-                return LispToken(kind: .open(symbol: symbol), range: range)
-
-            case ")":
-                currentIndex += 1
-                let range = NSRange(location: startIndex, length: 1)
-                return LispToken(kind: .close, range: range)
-
-            case ";":
-                // Comment - skip to end of line
-                while currentIndex < characters.count && characters[currentIndex] != "\n" {
+                    break
+                } else {
                     currentIndex += 1
                 }
-                let range = NSRange(location: startIndex, length: currentIndex - startIndex)
-                // Return as atom for now (comments are atoms in this context)
-                return LispToken(kind: .atom(String(characters[startIndex..<currentIndex])), range: range)
-
-            case "\"":
-                // String literal
-                currentIndex += 1
-                var stringContent = "\""
-                while currentIndex < characters.count {
-                    let c = characters[currentIndex]
-                    stringContent.append(c)
-                    if c == "\\" && currentIndex + 1 < characters.count {
-                        currentIndex += 1
-                        if currentIndex < characters.count {
-                            stringContent.append(characters[currentIndex])
-                        }
-                    } else if c == "\"" {
-                        currentIndex += 1
-                        break
-                    }
-                    currentIndex += 1
-                }
-                let range = NSRange(location: startIndex, length: currentIndex - startIndex)
-                return LispToken(kind: .atom(stringContent), range: range)
-
-            case "\n":
-                repeat {
-                    currentIndex += 1
-                } while currentIndex < characters.count && characters[currentIndex] == "\n"
-                // Skip consecutive newlines and continue scanning
-                continue
-
-            default:
-                // Regular atom - collect until whitespace or parens
-                var atom = ""
-                while currentIndex < characters.count {
-                    let c = characters[currentIndex]
-                    if c == " " || c == "\t" || c == "\n" || c == "\r" || c == "(" || c == ")" {
-                        break
-                    }
-                    atom.append(c)
-                    currentIndex += 1
-                }
-
-                if !atom.isEmpty {
-                    let range = NSRange(location: startIndex, length: atom.count)
-                    return LispToken(kind: .atom(atom), range: range)
-                }
-
-                return nil
             }
-        }
-
-        return nil
-    }
-    
-    /// Static helper method to get all tokens at once (for backward compatibility)
-    public static func tokenize(_ text: String) -> [TokenSpan] {
-        var tokens: [TokenSpan] = []
-        let characters = Array(text)
-        var index = 0
-        while index < characters.count {
-            let ch = characters[index]
-            switch ch {
-            case ";":
-                let start = index
-                while index < characters.count && characters[index] != "\n" { index += 1 }
-                tokens.append(TokenSpan(location: start, length: index - start, kind: .comment))
-            case "\"":
-                let start = index
-                index += 1
-                while index < characters.count {
-                    let c = characters[index]
-                    if c == "\\" {
-                        index += 2
-                        continue
-                    }
-                    if c == "\"" { index += 1; break }
-                    index += 1
-                }
-                tokens.append(TokenSpan(location: start, length: index - start, kind: .string))
-            case "(", ")":
-                tokens.append(TokenSpan(location: index, length: 1, kind: .paren))
-                index += 1
-            default:
-                index += 1
+            let text = String(characters[startIndex..<currentIndex])
+            return LispToken(kind: .atom(text), range: NSRange(location: startIndex, length: currentIndex - startIndex))
+        default:
+            var atom = ""
+            while currentIndex < characters.count {
+                let c = characters[currentIndex]
+                if c == " " || c == "\t" || c == "\n" || c == "\r" || c == "(" || c == ")" { break }
+                atom.append(c)
+                currentIndex += 1
             }
+            guard !atom.isEmpty else { return nextToken() }
+            return LispToken(kind: .atom(atom), range: NSRange(location: startIndex, length: atom.count))
         }
-        return tokens
     }
 }
 
-/// For backward compatibility, keep the static interface
-public struct LispTokenizer {
-    public static func tokenize(_ text: String) -> [TokenSpan] {
-        return StandardLispTokenizer.tokenize(text)
+public extension StandardLispTokenizer {
+    /// Convenience method mirroring `LispTokenizer.tokenize` so callers can
+    /// obtain `TokenSpan` values using the StandardLispTokenizer implementation.
+    static func tokenize(_ source: String) -> [TokenSpan] {
+        return LispTokenizer.tokenize(source)
     }
 }
